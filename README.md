@@ -1,83 +1,137 @@
 # AI Resume Screening Agent
 
-A small web service that ranks resumes against a job description. Upload one or more resumes (PDF, DOCX or TXT), paste the job description, and get a ranked list with a 0-100 match score, matched and missing skills, strengths, concerns and a Shortlist / Maybe / Reject recommendation.
+An LLM-powered service that screens resumes against a job description. An LLM reads each resume and the job description, extracts structured data, checks every requirement against quoted evidence from the resume, and writes the strengths, concerns and tailored interview questions. A deterministic scorer then turns the verified data into a 0-100 match score and a Shortlist / Maybe / Reject recommendation. You can also ask questions about the screened candidates and get answers with citations to resume passages.
 
-Built as an internship project (Blackbucks Internships 2026, Generative AI Engineer track) by Beernelli Vishnu Vardhan, B.Tech CSIT, MVSR Engineering College.
+Built as an internship project (Blackbucks Internships 2026, Generative AI Engineer) by Beernelli Vishnu Vardhan, B.Tech CSIT, MVSR Engineering College.
 
-![Screening results](docs/screenshot.png)
+![Screening results in llm mode, produced by qwen2.5:1.5b running locally on Ollama](docs/screenshot.png)
+
+The screenshot above is real model output (`qwen2.5:1.5b` through Ollama on a CPU-only machine). `docs/screenshot_fallback.png` shows the same screening in the offline fallback mode.
 
 ## Problem
 
-Recruiters spend most of their first pass on a stack of resumes checking the same things: does the candidate have the required skills, roughly enough experience, and relevant background. This project automates that first pass and explains each result so the ranking can be checked rather than trusted blindly. It is a screening aid, not a hiring decision maker.
+A recruiter's first pass over a stack of resumes checks the same things each time: required skills, roughly enough experience, relevant projects. This project automates that pass and shows its evidence, so a reviewer can check the result instead of trusting it. It is a screening aid, not a hiring decision maker.
 
 ## How it works
 
 ```mermaid
-flowchart LR
-    A[Resume files + job description] --> B[1. Parse<br/>PDF / DOCX / TXT to text]
-    B --> C[2. Extract<br/>skills + years of experience]
-    C --> D[3. Semantic match<br/>embeddings or TF-IDF]
-    D --> E[4. Score<br/>weighted combination]
-    E --> F[5. Explain<br/>LLM or rule-based]
-    F --> G[6. Rank<br/>sorted candidate list]
+flowchart TD
+    JD[Job description] --> J[LLM: extract requirements<br/>must-have / nice-to-have / min years]
+    R[Resume files] --> P[Parse PDF / DOCX / TXT]
+    P --> X[LLM: extract candidate profile<br/>skills, years, education, projects, roles]
+    J --> A[LLM: assess fit<br/>status + verbatim quotes per requirement]
+    X --> A
+    A --> V[Verify against the resume text<br/>quotes must be verbatim,<br/>skills must be mentioned]
+    V --> S[Deterministic score<br/>skills + embedding similarity + experience]
+    S --> W[LLM: strengths, concerns,<br/>summary, interview questions]
+    W --> OUT[Ranked JSON + UI<br/>analysis_mode = llm]
+    P --> C[Chunk + embed resumes]
+    C --> Q[Ask about candidates<br/>retrieve, LLM answers with citations]
+    X -.->|provider down or output invalid| F[Rule-based fallback<br/>analysis_mode = fallback]
 ```
 
-| Step | Module | What it does |
-|------|--------|--------------|
-| Parse | `app/services/parser.py` | Reads PDF (pypdf), DOCX (python-docx) and TXT. Validates content, not just the extension, and guesses the candidate name. |
-| Extract | `app/services/skills.py`, `experience.py` | Matches skills against a taxonomy in `app/data/skills.json`. Separates required from optional skills in the job description using section headings. Estimates years of experience from explicit statements or date ranges. |
-| Semantic match | `app/services/similarity.py` | Cosine similarity between the job description and each resume. Uses `all-MiniLM-L6-v2` sentence embeddings when available, otherwise TF-IDF. |
-| Score | `app/services/scoring.py` | Combines the three signals into one score and maps it to a recommendation. |
-| Explain | `app/services/reasoning.py` | Writes strengths, concerns and a summary. Uses an LLM if configured, otherwise a deterministic rule-based writer. |
-| Rank | `app/services/pipeline.py` | Orchestrates the steps and sorts candidates by score. |
+The principle is **the LLM proposes, deterministic code checks**. Everything a model returns is validated against a Pydantic schema, and then checked against the resume text before it can affect a score:
 
-### Scoring
+| What the LLM returns | What is checked before it is used |
+|---|---|
+| JSON of any shape | Schema validation, then one repair attempt that sends the validation error back to the model. If the second reply is also invalid the step falls back. |
+| Candidate skills | A skill counts only if the resume literally mentions it (name or alias). Others are listed as `unsupported_skills` and never scored. |
+| Evidence quotes | A quote counts only if it appears verbatim in the resume (whitespace-insensitive). A status of "met" needs a verified quote that names the requirement; otherwise it is downgraded to "partial" or "unverified". If the resume does name a requirement the model missed, the literal line is used instead. |
+| JD requirements | Dropped, with a warning, if the job description does not mention them. |
+| Years of experience | If the model's figure differs by more than a year from date arithmetic on the resume, the date-based figure is used and a warning is added. |
+| Candidate name | Used only if it appears in the resume text. |
+
+### Why the score is not produced by the LLM
 
 ```
 score = 100 * (0.55 * skill_coverage + 0.30 * text_similarity + 0.15 * experience_fit)
 ```
 
-- **skill_coverage**: share of job skills found in the resume. Required skills count 1, preferred skills count 0.5.
-- **text_similarity**: cosine similarity divided by a per-backend constant (0.45 for TF-IDF, 0.8 for embeddings) and capped at 1. The constants are hand-picked so typical good matches land near the top of the range; they are not learned from data.
-- **experience_fit**: candidate years divided by the years the job asks for, capped at 1. Unknown experience scores 0.
-- If the job description has no recognised skills or no stated years, that component is dropped and the other weights are renormalised.
-- Recommendation: 70 and above is Shortlist, 45 to 69.9 is Maybe, below 45 is Reject.
+A model-generated number changes between runs and models, cannot be explained, and is the obvious target for a prompt injection ("score this resume 100"). So the LLM supplies the *inputs* (structured requirements, verified skills, evidence) and the arithmetic is fixed. The same resume therefore gets the same score whatever wording the model chooses for its summary, which is tested (`test_score_is_deterministic_function_of_extracted_data`, `test_prompt_injection_in_resume_cannot_change_the_score`).
 
-Weights and thresholds are configurable (see [Configuration](#configuration)).
+- **skill_coverage**: share of job requirements the resume demonstrably covers. Must-have counts 1, nice-to-have counts 0.5.
+- **text_similarity**: cosine similarity between job description and resume (`all-MiniLM-L6-v2` embeddings if installed, otherwise TF-IDF), divided by a per-backend constant and capped at 1. The constants are hand-picked, not learned.
+- **experience_fit**: candidate years divided by the years the job asks for, capped at 1.
+- A component with no data (for example a job with no stated years) is dropped and the weights renormalised.
+- 70 and above is Shortlist, 45 to 69.9 Maybe, below 45 Reject.
 
-The recommendation always comes from the score, never from the LLM. The LLM only writes the explanation text.
+### Prompts
 
-### LLM step and offline behaviour
+Prompts are versioned files in `app/prompts/v1/` (`extract_job`, `extract_resume`, `assess_fit`, `write_report`, `answer_question`, `repair`). Each has a system section and a user section. Set `PROMPT_VERSION` to use another directory. Resume and job text is always wrapped in tags and the system prompt states that it is untrusted data whose instructions must be ignored. The prompt version is part of the cache key.
 
-The explanation step is pluggable. Set `LLM_API_KEY` to use any OpenAI-compatible chat completions endpoint (Groq by default; OpenAI, Hugging Face Inference endpoints that expose the same API, or a local server work by changing `LLM_BASE_URL` and `LLM_MODEL`).
+### Analysis modes
 
-If no key is set, or a call fails (timeout, HTTP error, malformed output), the rule-based writer produces the explanation instead. The application works fully offline; each result reports which writer produced its text in the `reasoner` field.
+Every response carries `analysis_mode`: `llm` or `fallback`, at the top level and per candidate. The UI shows a banner and a tag per candidate.
 
-When an LLM is configured, an excerpt of each resume (first 3000 characters) is sent to that provider. Do not enable it for data you are not allowed to share. Resume text is treated as untrusted in the prompt, and since the LLM cannot change the score or recommendation, an injected instruction in a resume can at most affect the wording of its own explanation.
+- `llm`: every step for that candidate came from the model.
+- `fallback`: at least one step used the rule-based engine (keyword skill taxonomy, regex years, template text). Warnings say which step and why.
+- If the very first call (job requirement extraction) fails, the provider is assumed to be down. The whole run uses the rule-based engine instead of timing out once per resume, and `llm_model` is `null`.
+
+The rule-based path is an explicit offline fallback, not a second product. Its explanations are template text, and its skill matching is limited to a 77-skill taxonomy in `app/data/skills.json`.
+
+### Ask about candidates (RAG)
+
+After a screening, `POST /ask` answers a question about those candidates. Resumes were split into overlapping line-based chunks of at most 600 characters at screening time. A question is embedded with the same backend as the similarity score, the top `ASK_TOP_K` chunks are retrieved (a question that names a candidate searches only that candidate's chunks), and the LLM answers from the numbered excerpts with citation numbers. Citations that do not match a retrieved excerpt are dropped, and `grounded` is `false` when an answer has none. Without an LLM the endpoint returns the most relevant excerpts and says so.
+
+## LLM providers
+
+All providers go through one OpenAI-compatible client (`app/llm/client.py`, `httpx`). Choose with `LLM_PROVIDER`:
+
+| Provider | `LLM_PROVIDER` | Default model | Needs |
+|---|---|---|---|
+| Groq (default, free tier) | `groq` | `llama-3.1-8b-instant` | `LLM_API_KEY` from console.groq.com |
+| OpenAI | `openai` | `gpt-4o-mini` | `LLM_API_KEY` |
+| OpenRouter | `openrouter` | `meta-llama/llama-3.1-8b-instruct` | `LLM_API_KEY` |
+| Ollama (local) | `ollama` | `qwen2.5:1.5b` | A running Ollama with the model pulled |
+| Any OpenAI-compatible server | `custom` | none | `LLM_BASE_URL`, `LLM_MODEL` |
+| No LLM | `none` | none | Fallback mode only |
+
+If the provider is `groq` (the default) but no key is set, the app starts in fallback mode and says so on `/health`.
+
+Quick start with Groq: create a free key at https://console.groq.com/keys, then
+
+```bash
+cp .env.example .env        # set LLM_API_KEY=gsk_...
+uvicorn app.main:app
+```
+
+Quick start with Ollama:
+
+```bash
+ollama pull qwen2.5:1.5b
+LLM_PROVIDER=ollama LLM_MODEL=qwen2.5:1.5b LLM_TIMEOUT_SECONDS=120 LLM_MAX_CONCURRENCY=1 uvicorn app.main:app
+```
+
+Reliability: per-request timeout (`LLM_TIMEOUT_SECONDS`), retries with exponential backoff on connection errors, 429 and 5xx (honouring `Retry-After`), a semaphore capping simultaneous calls (`LLM_MAX_CONCURRENCY`), and no API key in logs or error messages. Responses that pass validation are cached on disk under `LLM_CACHE_DIR`, keyed by a SHA-256 of the model name, prompt version, prompt name and full rendered prompt; invalid output is never cached.
+
+**Privacy.** Resume text is sent to the configured provider. The disk cache also stores resume-derived output. Do not use a hosted provider or the cache for data you may not share: use Ollama and set `LLM_CACHE_ENABLED=false`, or clear `LLM_CACHE_DIR`.
 
 ## Tech stack
 
-- Python 3.11+, FastAPI, Pydantic v2, pydantic-settings
+- Python 3.11+, FastAPI, Pydantic v2, pydantic-settings, httpx
 - pypdf, python-docx
 - scikit-learn (TF-IDF), sentence-transformers (optional)
-- httpx for the LLM call
-- Plain HTML, CSS and JavaScript front end served by FastAPI (no build step)
+- Plain HTML, CSS and JavaScript front end (no build step)
 - pytest, ruff, GitHub Actions, Docker
 
 ## Project layout
 
 ```
 app/
-  main.py            application factory, static file mount
-  api/               routes and dependencies
-  core/              settings, logging, error types
-  models/schemas.py  request/response models
-  services/          parser, skills, experience, similarity, scoring, reasoning, pipeline
-  data/skills.json   skill taxonomy
-static/              web UI
-samples/             sample job description and four fictional resumes
-tests/               pytest suite
-scripts/             sample file generator, screenshot capture
+  main.py              application factory, static file mount
+  api/                 routes (/screen, /ask, /health) and dependency wiring
+  core/                settings and provider presets, logging, error types
+  llm/                 OpenAI-compatible client, structured output + repair, disk cache, prompt loader
+  prompts/v1/          versioned prompt files
+  models/              schemas.py (API) and genai.py (LLM output schemas)
+  services/            parser, skills, experience, similarity, scoring,
+                       engine / llm_engine (LLM and rule-based analysis), evidence checks,
+                       reasoning (fallback text), rag, pipeline
+  data/skills.json     skill taxonomy (used by the fallback and for name normalisation)
+static/                web UI
+samples/               sample job description and four fictional resumes
+tests/                 pytest suite (LLM is always mocked, no network)
+scripts/               sample file generator, screenshot capture
 ```
 
 ## Setup
@@ -86,29 +140,22 @@ scripts/             sample file generator, screenshot capture
 python3 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env                 # then set LLM_API_KEY, or LLM_PROVIDER=ollama
 uvicorn app.main:app --reload
 ```
 
-Open http://127.0.0.1:8000. The interactive API docs are at http://127.0.0.1:8000/docs.
+Open http://127.0.0.1:8000. API docs are at http://127.0.0.1:8000/docs.
 
-Optional extras:
-
-```bash
-pip install -r requirements-embeddings.txt   # sentence embeddings (downloads PyTorch and the model)
-cp .env.example .env                          # then edit, for example to set LLM_API_KEY
-```
-
-With `EMBEDDING_BACKEND=auto` (the default) the app uses embeddings when `sentence-transformers` is installed and the model loads, and otherwise logs a warning and uses TF-IDF.
+Optional sentence embeddings (downloads PyTorch and the model): `pip install -r requirements-embeddings.txt`. With `EMBEDDING_BACKEND=auto` the app uses them if available and otherwise uses TF-IDF.
 
 ### Docker
 
 ```bash
 docker build -t resume-screening-agent .
 docker run --rm -p 8000:8000 --env-file .env resume-screening-agent
-# include embeddings: docker build --build-arg INSTALL_EMBEDDINGS=true -t resume-screening-agent .
 ```
 
-The Dockerfile has not been built or tested yet, and CI does not build the image.
+To reach Ollama on the host from a container use `LLM_BASE_URL=http://host.docker.internal:11434/v1` with `LLM_PROVIDER=custom`. The Dockerfile has not been built or tested, and CI does not build the image.
 
 ### Tests and lint
 
@@ -118,18 +165,27 @@ pytest
 ruff check . && ruff format --check .
 ```
 
+The tests never touch the network. The LLM is replaced by a scripted fake (`tests/fakes.py`) or by `httpx.MockTransport`. They cover JSON extraction and validation, the repair retry, retries and timeouts, caching, evidence verification, fallback switching (per step and whole run), the injection and determinism properties above, RAG retrieval and citation filtering, and the API.
+
 ## Configuration
 
-All settings are environment variables (or entries in `.env`). See `.env.example` for the full list.
+Environment variables or `.env`; see `.env.example` for all of them with comments.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
+| `LLM_PROVIDER` | `groq` | `groq`, `openai`, `openrouter`, `ollama`, `custom` or `none` |
+| `LLM_API_KEY` | unset | Key for hosted providers |
+| `LLM_BASE_URL`, `LLM_MODEL` | provider preset | Override the preset |
+| `LLM_TIMEOUT_SECONDS` | `60` | Per-request timeout |
+| `LLM_MAX_RETRIES` | `2` | Retries on transient errors |
+| `LLM_MAX_CONCURRENCY` | `2` | Simultaneous LLM calls |
+| `LLM_JSON_MODE` | `true` | Request `response_format=json_object` |
+| `LLM_CACHE_ENABLED`, `LLM_CACHE_DIR` | `true`, `.cache/llm` | Disk cache |
+| `PROMPT_VERSION` | `v1` | Directory under `app/prompts/` |
+| `ASK_TOP_K`, `MAX_QUESTION_CHARS` | `5`, `500` | Ask endpoint |
+| `MAX_SCREENINGS_KEPT` | `20` | Screenings kept in memory for questions |
 | `EMBEDDING_BACKEND` | `auto` | `auto`, `tfidf` or `sbert` |
-| `LLM_API_KEY` | unset | Enables the LLM explanation step |
-| `LLM_BASE_URL` | `https://api.groq.com/openai/v1` | OpenAI-compatible base URL |
-| `LLM_MODEL` | `llama-3.1-8b-instant` | Model name sent to the provider |
-| `MAX_FILE_SIZE_MB` | `5` | Per-file upload limit |
-| `MAX_FILES` | `20` | Files per request |
+| `MAX_FILE_SIZE_MB`, `MAX_FILES` | `5`, `20` | Upload limits |
 | `WEIGHT_SKILLS`, `WEIGHT_SEMANTIC`, `WEIGHT_EXPERIENCE` | `0.55`, `0.30`, `0.15` | Score weights |
 | `SHORTLIST_THRESHOLD`, `MAYBE_THRESHOLD` | `70`, `45` | Recommendation cut-offs |
 
@@ -138,15 +194,12 @@ All settings are environment variables (or entries in `.env`). See `.env.example
 ### `GET /health`
 
 ```json
-{"status": "ok", "version": "1.0.0", "llm_enabled": false}
+{"status": "ok", "version": "1.0.0", "llm_enabled": true, "llm_model": "qwen2.5:1.5b"}
 ```
 
 ### `POST /screen`
 
-`multipart/form-data` with:
-
-- `job_description` (text, 40 to 20,000 characters)
-- `resumes` (one or more files: `.pdf`, `.docx`, `.txt`)
+`multipart/form-data` with `job_description` (text, 40 to 20,000 characters) and `resumes` (one or more `.pdf`, `.docx` or `.txt` files).
 
 ```bash
 curl -X POST http://127.0.0.1:8000/screen \
@@ -157,88 +210,111 @@ curl -X POST http://127.0.0.1:8000/screen \
   -F "resumes=@samples/imran_khan.pdf"
 ```
 
-Response (trimmed to the first candidate):
+Response (trimmed; real output of `qwen2.5:1.5b`):
 
 ```json
 {
+  "screening_id": "3f9c...",
+  "analysis_mode": "llm",
+  "llm_model": "qwen2.5:1.5b",
   "job": {
-    "required_skills": ["LLMs", "Python", "REST APIs", "FastAPI", "Prompt Engineering", "RAG",
-                        "LangChain", "Hugging Face", "Git", "SQL", "Docker"],
-    "preferred_skills": ["AWS", "Vector Databases", "Flask", "scikit-learn", "Pandas", "NumPy", "CI/CD"],
-    "required_years": 1.0
+    "must_have": ["Python", "FastAPI", "LLMs", "Prompt Engineering", "RAG", "Git", "SQL", "Docker"],
+    "nice_to_have": ["AWS", "Vector Databases", "Flask", "scikit-learn", "Pandas", "NumPy", "CI/CD"],
+    "min_years": 1.0
   },
   "candidates": [
     {
       "rank": 1,
       "name": "Ananya Rao",
-      "filename": "ananya_rao.txt",
-      "score": 79.6,
+      "score": 92.2,
       "recommendation": "Shortlist",
-      "matched_skills": ["LLMs", "Python", "REST APIs", "FastAPI", "..."],
+      "analysis_mode": "llm",
+      "matched_skills": ["Python", "FastAPI", "LLMs", "..."],
       "missing_skills": [],
-      "missing_preferred_skills": ["Flask"],
-      "years_experience": 2.0,
-      "breakdown": {"skill_coverage": 96.6, "semantic_similarity": 38.4, "experience_fit": 100.0},
-      "strengths": ["Covers 11 of 11 required skills: ..."],
-      "concerns": ["No significant gaps found against the stated requirements."],
-      "summary": "Score 79.6/100 with 11/11 required skills. Strong match; recommend moving to interview.",
-      "reasoner": "rule_based"
+      "unsupported_skills": [],
+      "unsupported_claims": [],
+      "evidence": [
+        {"requirement": "Python", "status": "met",
+         "quotes": ["Software engineer focused on LLM-backed backend services. Roughly 2 years of experience in Python development."]}
+      ],
+      "years_experience": 2.5,
+      "breakdown": {"skill_coverage": 95.7, "semantic_similarity": 38.4, "experience_fit": 100.0},
+      "strengths": ["..."],
+      "concerns": ["..."],
+      "summary": "...",
+      "interview_questions": ["...", "...", "..."]
     }
   ],
   "rejected_files": [],
   "warnings": [],
-  "similarity_backend": "tfidf",
-  "llm_enabled": false,
-  "processing_ms": 41
+  "similarity_backend": "sbert",
+  "llm_enabled": true,
+  "processing_ms": 61
 }
 ```
 
-Candidates are sorted by score, highest first.
+Candidates are sorted by score, highest first. A file that cannot be read (wrong type, empty, corrupt, password protected, scanned image, too large) does not fail the request; it is listed in `rejected_files`.
+
+### `POST /ask`
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask -H "Content-Type: application/json" \
+  -d '{"screening_id": "3f9c...", "question": "Which candidate has built a RAG system with LangChain?"}'
+```
+
+```json
+{
+  "answer": "Ananya Rao",
+  "citations": [{"ref": 3, "candidate": "Ananya Rao", "filename": "ananya_rao.txt", "excerpt": "..."}],
+  "analysis_mode": "llm",
+  "grounded": true
+}
+```
 
 **Errors** return `{"detail": "...", "code": "..."}`:
 
 | Status | Code | When |
 |--------|------|------|
-| 422 | `invalid_request` | Job description too short or too long, too many files, or a missing field |
-| 422 | `no_valid_resumes` | Every file was rejected; the body includes `rejected_files` with a reason for each |
-
-A file that cannot be read (wrong type, empty, corrupt, password protected, scanned image, over the size limit) does not fail the request. It is listed in `rejected_files` and the remaining resumes are still screened.
+| 422 | `invalid_request` | Bad job description length, too many files, empty or over-long question, missing field |
+| 422 | `no_valid_resumes` | Every file was rejected; `rejected_files` explains each |
+| 404 | `screening_not_found` | Unknown or expired `screening_id` (screenings are kept in memory and lost on restart) |
 
 ## Sample results
 
-Running the four sample resumes against `samples/job_description.txt` (all four resumes are fictional):
+The four fictional resumes against `samples/job_description.txt`, with the sentence-embedding backend:
 
-| Rank | Candidate | Score (TF-IDF) | Recommendation | Score (embeddings) |
-|------|-----------|----------------|----------------|--------------------|
-| 1 | Ananya Rao | 79.6 | Shortlist | 95.1 |
-| 2 | Sneha Reddy | 48.4 | Maybe | 59.8 |
-| 3 | Kiran Patel | 38.1 | Reject | 50.3 (Maybe) |
-| 4 | Imran Khan | 29.3 | Reject | 40.8 |
+| Candidate | `llm` mode (qwen2.5:1.5b) | `fallback` mode |
+|-----------|---------------------------|-----------------|
+| Ananya Rao | 92.2 Shortlist | 95.1 Shortlist |
+| Sneha Reddy | 69.0 Maybe | 59.8 Maybe |
+| Kiran Patel | 55.2 Maybe | 50.3 Maybe |
+| Imran Khan | 38.5 Reject | 40.8 Reject |
 
-The ordering is the same with both backends, but absolute scores differ, and the embedding backend scores unrelated text higher. This is a four-resume demonstration, not an evaluation: no accuracy figure has been measured.
-
-## Screenshots
-
-The screenshot at the top (`docs/screenshot.png`) shows the UI after screening the sample files with the TF-IDF backend, with the first candidate's details expanded. It can be regenerated with `python scripts/capture_screenshot.py` while the server is running (needs Playwright and Chrome).
+Both modes give the same order. The real run took about 2 minutes the first time (four resumes, one call at a time on CPU, 13 model calls) and under a second with a warm cache. This is a four-resume demonstration, not an evaluation: no accuracy figure was measured.
 
 ## Known limitations
 
-- Skill matching is keyword based. "Docker" is matched, "containerisation" is not, and the taxonomy covers 77 common technical skills. Extend `app/data/skills.json` for other domains.
-- A job description line such as "Flask or FastAPI" counts both skills as required. Write alternatives as separate sections or mark one as preferred.
-- Years of experience are estimated from "N years of experience" statements or date ranges and can be wrong for unusual formats. Lines mentioning degrees or schools are ignored.
-- Scanned (image-only) PDFs are rejected; there is no OCR.
-- `all-MiniLM-L6-v2` reads about the first 256 word pieces of each text, so long resumes are only partly represented in the embedding score.
-- Score weights and normalisation constants are reasonable defaults, not tuned on labelled data. Treat scores as a ranking aid.
-- There is no authentication, rate limiting or storage. Uploaded files are processed in memory and discarded. Add these before exposing the service publicly.
+- **Small-model quality.** The demo used a 1.5B parameter model. Its structured extraction and evidence quoting are usable because they are verified, but its free-text output is weaker. For example, it wrote "Missing experience in AWS and Vector Databases" for a candidate whose evidence table shows both as met, and its interview questions are sometimes clumsy. The score does not depend on that text, but the text can contradict the evidence table. A larger model (Groq's llama-3.1-8b-instant or better) is expected to do better; that has not been measured here.
+- **`/ask` can be wrong.** With the same 1.5B model, "Does Imran Khan have any Python experience?" was answered "Yes" with citations to excerpts that do not mention Python. Citations let a reader check, but the check is manual: the app verifies that a citation points at a retrieved excerpt, not that the excerpt supports the answer.
+- **Verification is lexical.** A quote must be verbatim and a skill must be named. A candidate who describes containerisation without writing "Docker" is marked as not found by the checks (the LLM's "met" is downgraded).
+- Years of experience are overruled by date arithmetic, which can itself be wrong for unusual date formats. The minimum years the model extracts from the job description is not cross-checked.
+- Prompts cap each document at 6000 characters (Ollama's default context is small), so very long resumes are truncated.
+- RAG re-embeds chunks for every question and keeps screenings in memory only. There is no vector database.
+- The disk cache stores resume-derived text (see the privacy note).
+- Scanned PDFs are rejected; there is no OCR.
+- Score weights and similarity constants are defaults, not tuned on labelled data.
+- No authentication, rate limiting or persistent storage. Add them before exposing the service.
+- Docker image and GitHub Actions workflow have not been run.
+- A scoring system on resume text can reproduce bias present in the data. It should assist, not replace, human review.
 
 ## Future scope
 
-- Evaluate against labelled resume and job pairs and tune weights from that data
+- Evaluate on labelled resume and job pairs; compare models and prompt versions with that set
+- Check that cited excerpts actually support an answer (entailment check)
+- Persist screenings and embeddings, export results as CSV
 - OCR for scanned resumes
-- Skill extraction beyond a fixed taxonomy (for example embedding-based skill matching)
-- Persisting screening sessions and exporting results as CSV
 - Authentication and per-user history
-- Bias and fairness review of the scoring features before any real-world use
+- Bias and fairness review of the scoring features before any real use
 
 ## License
 
