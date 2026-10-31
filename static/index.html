@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resume Screening Agent</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Resume Screening Agent</h1>
+    <span class="meta" id="status">Checking service&hellip;</span>
+  </header>
+
+  <main>
+    <form id="screen-form" novalidate>
+      <section class="panel">
+        <label for="jd">Job description</label>
+        <textarea id="jd" name="job_description" rows="12" placeholder="Paste the job description here. Put optional skills under a heading such as &quot;Nice to have&quot;."></textarea>
+      </section>
+
+      <section class="panel">
+        <label for="files">Resumes</label>
+        <input id="files" name="resumes" type="file" multiple accept=".pdf,.docx,.txt">
+        <p class="hint">PDF, DOCX or TXT. Default limits: 20 files per request, 5 MB per file.</p>
+        <ul id="file-list" class="file-list"></ul>
+        <button type="submit" id="submit" class="primary">Screen resumes</button>
+        <p id="form-error" class="error" role="alert" hidden></p>
+      </section>
+    </form>
+
+    <section id="results" hidden>
+      <div class="results-head">
+        <h2>Ranked candidates</h2>
+        <span class="meta" id="results-meta"></span>
+      </div>
+      <div id="job-profile" class="job-profile"></div>
+      <ul id="notices" class="notices"></ul>
+      <table>
+        <thead>
+          <tr>
+            <th class="col-rank">#</th>
+            <th>Candidate</th>
+            <th class="col-score">Match score</th>
+            <th>Recommendation</th>
+            <th class="col-toggle"><span class="sr-only">Details</span></th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
