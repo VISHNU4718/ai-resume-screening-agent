@@ -8,6 +8,7 @@
   const formError = document.getElementById("form-error");
   const results = document.getElementById("results");
   const body = document.getElementById("results-body");
+  let screeningId = null;
 
   // Build elements with textContent only, so resume-derived text is never parsed as HTML.
   function el(tag, opts, children) {
@@ -48,15 +49,42 @@
     return value === null || value === undefined ? "n/a" : Math.round(value) + "%";
   }
 
+  const STATUS_LABEL = { met: "Met", partial: "Partial", not_found: "Not found", unverified: "Unverified" };
+
+  function evidenceTable(items) {
+    if (!items.length) return el("p", { text: "No requirements to check.", className: "meta" });
+    const rows = items.map((e) => {
+      const quotes = e.quotes.length
+        ? el("div", {}, e.quotes.map((q) => el("q", { text: q })))
+        : el("span", { className: "meta", text: "no supporting line" });
+      return el("tr", {}, [
+        el("td", { text: e.requirement }),
+        el("td", { className: "status " + e.status, text: STATUS_LABEL[e.status] || e.status }),
+        el("td", {}, [quotes]),
+      ]);
+    });
+    return el("table", { className: "evidence" }, [el("tbody", {}, rows)]);
+  }
+
+  function modeTag(mode) {
+    return el("span", { className: "tag " + mode, text: mode === "llm" ? "LLM" : "Fallback" });
+  }
+
   function detailsRow(c) {
     const b = c.breakdown;
-    const years = c.years_experience === null ? "not determined" : c.years_experience + " years (estimated)";
+    const years = c.years_experience === null ? "not determined" : c.years_experience + " years";
+    const flagged = c.unsupported_claims.concat(
+      c.unsupported_skills.map((s) => s + " (listed by the extractor but not found in the resume text)")
+    );
     const grid = el("div", { className: "details-grid" }, [
       section("Summary", el("p", { text: c.summary }), "span-2"),
       section("Matched skills", chips(c.matched_skills, "matched")),
       section("Missing required skills", chips(c.missing_skills, "missing")),
       section("Strengths", list(c.strengths)),
       section("Concerns", list(c.concerns)),
+      section("Evidence from the resume", evidenceTable(c.evidence), "span-2"),
+      flagged.length ? section("Unsupported claims (excluded from the score)", list(flagged), "span-2") : null,
+      section("Suggested interview questions", el("ol", {}, c.interview_questions.map((t) => el("li", { text: t }))), "span-2"),
       section(
         "Score breakdown",
         el("p", {
@@ -66,9 +94,9 @@
         }),
         "span-2"
       ),
-      section("File", el("p", { text: c.filename + " \u00b7 explanation: " + (c.reasoner === "llm" ? "LLM" : "rule-based") }), "span-2"),
-    ]);
-    const td = el("td", { attrs: { colspan: "5" } }, [grid]);
+      section("File", el("p", { text: c.filename }), "span-2"),
+    ].filter(Boolean));
+    const td = el("td", { attrs: { colspan: "6" } }, [grid]);
     return el("tr", { className: "details" }, [td]);
   }
 
@@ -94,6 +122,7 @@
       el("td", { text: c.name }),
       el("td", {}, [el("div", { className: "score" }, [bar, el("span", { className: "value", text: c.score.toFixed(1) })])]),
       el("td", {}, [el("span", { className: "badge " + c.recommendation.toLowerCase(), text: c.recommendation })]),
+      el("td", {}, [modeTag(c.analysis_mode)]),
       el("td", {}, [toggle]),
     ]);
     return row;
@@ -102,11 +131,18 @@
   function render(data) {
     body.replaceChildren(...data.candidates.map(candidateRow));
 
+    const banner = document.getElementById("mode-banner");
+    banner.className = "mode-banner " + data.analysis_mode;
+    banner.textContent = data.analysis_mode === "llm"
+      ? "Analysis mode: LLM (" + data.llm_model + "). Extraction, evidence and the written report came from the model; the score is computed from that data by fixed rules."
+      : "Analysis mode: fallback (rule-based, no LLM). " +
+        (data.llm_enabled ? "The LLM was configured but could not be used for some or all steps." : "No LLM is configured.");
+
     const job = data.job;
     const parts = [];
-    parts.push("Required skills detected: " + (job.required_skills.join(", ") || "none"));
-    if (job.preferred_skills.length) parts.push("Preferred: " + job.preferred_skills.join(", "));
-    if (job.required_years !== null) parts.push("Experience asked: " + job.required_years + "+ years");
+    parts.push("Must have: " + (job.must_have.join(", ") || "none detected"));
+    if (job.nice_to_have.length) parts.push("Nice to have: " + job.nice_to_have.join(", "));
+    if (job.min_years !== null) parts.push("Experience asked: " + job.min_years + "+ years");
     document.getElementById("job-profile").textContent = parts.join(" \u00b7 ");
 
     const notices = document.getElementById("notices");
@@ -116,8 +152,9 @@
 
     document.getElementById("results-meta").textContent =
       data.candidates.length + " screened \u00b7 similarity: " + data.similarity_backend +
-      " \u00b7 explanations: " + (data.llm_enabled ? "LLM with rule-based fallback" : "rule-based") +
       " \u00b7 " + data.processing_ms + " ms";
+    screeningId = data.screening_id;
+    document.getElementById("ask-result").hidden = true;
     results.hidden = false;
   }
 
@@ -162,10 +199,60 @@
     }
   });
 
+  const askForm = document.getElementById("ask-form");
+  const askError = document.getElementById("ask-error");
+  const askSubmit = document.getElementById("ask-submit");
+
+  askForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    askError.hidden = true;
+    const question = document.getElementById("question").value.trim();
+    if (!question || !screeningId) return;
+    askSubmit.disabled = true;
+    askSubmit.textContent = "Asking\u2026";
+    try {
+      const response = await fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ screening_id: screeningId, question: question }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof payload.detail === "string" ? payload.detail : "Request failed (" + response.status + ").");
+      }
+      renderAnswer(payload);
+    } catch (err) {
+      document.getElementById("ask-result").hidden = true;
+      askError.textContent = err.message || "Could not reach the server.";
+      askError.hidden = false;
+    } finally {
+      askSubmit.disabled = false;
+      askSubmit.textContent = "Ask";
+    }
+  });
+
+  function renderAnswer(data) {
+    const note = data.analysis_mode === "llm"
+      ? (data.grounded ? "LLM answer, grounded in the excerpts cited below" : "LLM answer, but it cited no excerpt: treat it as unverified")
+      : "Fallback: no LLM answer, showing the most relevant resume excerpts";
+    document.getElementById("ask-mode").textContent = note;
+    document.getElementById("ask-answer").textContent = data.answer;
+    document.getElementById("ask-citations").replaceChildren(
+      ...data.citations.map((c) =>
+        el("li", { attrs: { value: String(c.ref) } }, [
+          el("strong", { text: c.candidate }),
+          el("span", { text: " (" + c.filename + "): " + c.excerpt }),
+        ])
+      )
+    );
+    document.getElementById("ask-result").hidden = false;
+  }
+
   fetch("/health")
     .then((r) => r.json())
     .then((h) => {
-      document.getElementById("status").textContent = "Service ok \u00b7 v" + h.version;
+      document.getElementById("status").textContent =
+        "Service ok \u00b7 v" + h.version + " \u00b7 " + (h.llm_enabled ? "LLM: " + h.llm_model : "no LLM configured (fallback mode)");
     })
     .catch(() => {
       document.getElementById("status").textContent = "Service unreachable";

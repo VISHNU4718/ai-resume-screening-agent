@@ -34,6 +34,7 @@
         <h2>Ranked candidates</h2>
         <span class="meta" id="results-meta"></span>
       </div>
+      <div id="mode-banner" class="mode-banner" role="status"></div>
       <div id="job-profile" class="job-profile"></div>
       <ul id="notices" class="notices"></ul>
       <table>
@@ -43,11 +44,30 @@
             <th>Candidate</th>
             <th class="col-score">Match score</th>
             <th>Recommendation</th>
+            <th>Analysis</th>
             <th class="col-toggle"><span class="sr-only">Details</span></th>
           </tr>
         </thead>
         <tbody id="results-body"></tbody>
       </table>
+
+      <section class="panel ask" id="ask-panel">
+        <h2>Ask about these candidates</h2>
+        <form id="ask-form" novalidate>
+          <label for="question" class="sr-only">Question</label>
+          <div class="ask-row">
+            <input id="question" type="text" maxlength="500" autocomplete="off"
+              placeholder="e.g. Who has built a RAG system? Does Kiran know Docker?">
+            <button type="submit" id="ask-submit" class="primary">Ask</button>
+          </div>
+        </form>
+        <p id="ask-error" class="error" role="alert" hidden></p>
+        <div id="ask-result" hidden>
+          <p id="ask-mode" class="meta"></p>
+          <p id="ask-answer" class="ask-answer"></p>
+          <ol id="ask-citations" class="citations"></ol>
+        </div>
+      </section>
     </section>
   </main>
 
