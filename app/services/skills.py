@@ -66,3 +66,42 @@ def extract_job_skills(jd_text: str) -> tuple[list[str], list[str]]:
     required = extract_skills(required_text)
     preferred = [s for s in extract_skills(preferred_text) if s not in required]
     return required, preferred
+
+
+@lru_cache
+def _alias_map() -> dict[str, str]:
+    taxonomy: dict[str, list[str]] = json.loads(_TAXONOMY_PATH.read_text(encoding="utf-8"))
+    mapping: dict[str, str] = {}
+    for canonical, aliases in taxonomy.items():
+        for alias in [canonical, *aliases]:
+            mapping[_norm(alias)] = canonical
+    return mapping
+
+
+def _norm(name: str) -> str:
+    return re.sub(r"[\s\-_]+", " ", name.strip().lower())
+
+
+def canonicalize(name: str) -> str:
+    """Map a free-form skill name to its taxonomy name ("pytorch lightning" stays as written).
+
+    This is what lets LLM-extracted skills ("FastAPI framework", "fast api") and taxonomy
+    skills be compared with plain equality in the scorer.
+    """
+    cleaned = " ".join(name.split())
+    return _alias_map().get(_norm(cleaned), cleaned)
+
+
+def mentioned_in(skill: str, text: str) -> bool:
+    """True if the skill (or a known alias of it) literally appears in text.
+
+    Used to check that a skill reported by the LLM is grounded in the resume.
+    """
+    canonical = canonicalize(skill)
+    for name, pattern in _patterns():
+        if name == canonical:
+            return pattern.search(text) is not None
+    body = re.escape(canonical.lower()).replace(r"\ ", r"[\s\-]+")
+    return (
+        re.search(rf"(?<![A-Za-z0-9+#.]){body}(?![A-Za-z0-9+#])", text, re.IGNORECASE) is not None
+    )

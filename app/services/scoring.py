@@ -1,4 +1,9 @@
-"""Step 4: combine skill coverage, semantic similarity and experience into one score."""
+"""Step 4: combine skill coverage, semantic similarity and experience into one score.
+
+The inputs come from the extraction step (LLM or rule-based) but the arithmetic is fixed
+and the same for both paths. The LLM never outputs the number or the recommendation: a
+model's score would vary between runs and could not be explained or audited.
+"""
 
 from dataclasses import dataclass
 
@@ -17,12 +22,12 @@ class SkillMatch:
 
 
 def match_skills(resume_skills: list[str], required: list[str], preferred: list[str]) -> SkillMatch:
-    have = set(resume_skills)
+    have = {s.lower() for s in resume_skills}
     return SkillMatch(
-        matched_required=[s for s in required if s in have],
-        missing_required=[s for s in required if s not in have],
-        matched_preferred=[s for s in preferred if s in have],
-        missing_preferred=[s for s in preferred if s not in have],
+        matched_required=[s for s in required if s.lower() in have],
+        missing_required=[s for s in required if s.lower() not in have],
+        matched_preferred=[s for s in preferred if s.lower() in have],
+        missing_preferred=[s for s in preferred if s.lower() not in have],
     )
 
 

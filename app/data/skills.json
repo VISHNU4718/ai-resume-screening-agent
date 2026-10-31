@@ -62,7 +62,8 @@
     "node js"
   ],
   "FastAPI": [
-    "fastapi"
+    "fastapi",
+    "fast api"
   ],
   "Flask": [
     "flask"

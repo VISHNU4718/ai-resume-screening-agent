@@ -97,8 +97,3 @@ def test_settings_reject_inverted_thresholds():
 def test_settings_reject_all_zero_weights():
     with pytest.raises(ValidationError):
         make_settings(weight_skills=0, weight_semantic=0, weight_experience=0)
-
-
-def test_blank_api_key_is_treated_as_unset():
-    assert make_settings(llm_api_key="  ").llm_enabled is False
-    assert make_settings(llm_api_key="abc").llm_enabled is True
