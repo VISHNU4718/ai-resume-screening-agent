@@ -1,0 +1,3 @@
+# Optional: sentence embeddings (all-MiniLM-L6-v2). Pulls in PyTorch (large download).
+-r requirements.txt
+sentence-transformers>=2.7
