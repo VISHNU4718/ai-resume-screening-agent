@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api.deps import get_pipeline
+from app.api.deps import get_ask_service
 from app.api.routes import router
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging(get_settings().log_level)
-    get_pipeline()  # load models at startup instead of on the first request
+    get_ask_service()  # builds the pipeline and loads models now, not on the first request
     logger.info("Application ready")
     yield
 
@@ -28,7 +28,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AI Resume Screening Agent",
         version=__version__,
-        description="Ranks resumes against a job description.",
+        description="LLM-based resume screening with a deterministic score.",
         lifespan=lifespan,
     )
     register_error_handlers(app)
