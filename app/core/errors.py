@@ -33,6 +33,11 @@ class NoValidResumesError(AppError):
     code = "no_valid_resumes"
 
 
+class ScreeningNotFoundError(AppError):
+    status_code = 404
+    code = "screening_not_found"
+
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _handle_app_error(_: Request, exc: AppError) -> JSONResponse:
