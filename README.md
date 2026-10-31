@@ -2,6 +2,8 @@
 
 An LLM-powered service that screens resumes against a job description. An LLM reads each resume and the job description, extracts structured data, checks every requirement against quoted evidence from the resume, and writes the strengths, concerns and tailored interview questions. A deterministic scorer then turns the verified data into a 0-100 match score and a Shortlist / Maybe / Reject recommendation. You can also ask questions about the screened candidates and get answers with citations to resume passages.
 
+**Live demo: https://resumelens-ai-screening.vercel.app** (hosted on Vercel's free tier, FastAPI serverless function). The demo runs in **fallback mode** (rule-based analysis, no LLM) unless an LLM key is set: set `LLM_API_KEY` (and optionally `LLM_PROVIDER`) in the Vercel project's environment variables to switch it to LLM mode. Interactive API docs are at `/docs`. The first request after idle can take a few seconds (cold start).
+
 Built as an internship project (Blackbucks Internships 2026, Generative AI Engineer) by Beernelli Vishnu Vardhan, B.Tech CSIT, MVSR Engineering College.
 
 ![Screening results in llm mode, produced by qwen2.5:1.5b running locally on Ollama](docs/screenshot.png)
