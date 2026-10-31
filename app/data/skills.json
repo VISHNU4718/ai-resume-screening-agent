@@ -1,0 +1,296 @@
+{
+  "Python": [
+    "python",
+    "python3"
+  ],
+  "Java": [
+    "java"
+  ],
+  "JavaScript": [
+    "javascript",
+    "js",
+    "ecmascript"
+  ],
+  "TypeScript": [
+    "typescript"
+  ],
+  "C++": [
+    "c++"
+  ],
+  "C#": [
+    "c#"
+  ],
+  "Go": [
+    "golang"
+  ],
+  "Rust": [
+    "rust"
+  ],
+  "SQL": [
+    "sql"
+  ],
+  "PostgreSQL": [
+    "postgresql",
+    "postgres"
+  ],
+  "MySQL": [
+    "mysql"
+  ],
+  "MongoDB": [
+    "mongodb",
+    "mongo"
+  ],
+  "Redis": [
+    "redis"
+  ],
+  "HTML": [
+    "html",
+    "html5"
+  ],
+  "CSS": [
+    "css",
+    "css3"
+  ],
+  "React": [
+    "react",
+    "react.js",
+    "reactjs"
+  ],
+  "Node.js": [
+    "node.js",
+    "nodejs",
+    "node js"
+  ],
+  "FastAPI": [
+    "fastapi"
+  ],
+  "Flask": [
+    "flask"
+  ],
+  "Django": [
+    "django"
+  ],
+  "REST APIs": [
+    "rest api",
+    "rest apis",
+    "restful api",
+    "restful apis",
+    "restful"
+  ],
+  "GraphQL": [
+    "graphql"
+  ],
+  "Git": [
+    "git"
+  ],
+  "GitHub": [
+    "github"
+  ],
+  "Docker": [
+    "docker"
+  ],
+  "Kubernetes": [
+    "kubernetes",
+    "k8s"
+  ],
+  "CI/CD": [
+    "ci/cd",
+    "cicd",
+    "continuous integration"
+  ],
+  "Linux": [
+    "linux"
+  ],
+  "AWS": [
+    "aws",
+    "amazon web services"
+  ],
+  "Azure": [
+    "azure"
+  ],
+  "GCP": [
+    "gcp",
+    "google cloud"
+  ],
+  "Machine Learning": [
+    "machine learning"
+  ],
+  "Deep Learning": [
+    "deep learning"
+  ],
+  "NLP": [
+    "nlp",
+    "natural language processing"
+  ],
+  "Computer Vision": [
+    "computer vision"
+  ],
+  "Generative AI": [
+    "generative ai",
+    "genai",
+    "gen ai"
+  ],
+  "LLMs": [
+    "llm",
+    "llms",
+    "large language model",
+    "large language models"
+  ],
+  "Prompt Engineering": [
+    "prompt engineering"
+  ],
+  "RAG": [
+    "rag",
+    "retrieval augmented generation",
+    "retrieval-augmented generation"
+  ],
+  "LangChain": [
+    "langchain"
+  ],
+  "Hugging Face": [
+    "hugging face",
+    "huggingface"
+  ],
+  "Transformers": [
+    "transformers"
+  ],
+  "Sentence Transformers": [
+    "sentence-transformers",
+    "sentence transformers"
+  ],
+  "Vector Databases": [
+    "vector database",
+    "vector databases",
+    "vector db",
+    "faiss",
+    "chroma",
+    "pinecone"
+  ],
+  "PyTorch": [
+    "pytorch"
+  ],
+  "TensorFlow": [
+    "tensorflow"
+  ],
+  "Keras": [
+    "keras"
+  ],
+  "scikit-learn": [
+    "scikit-learn",
+    "sklearn",
+    "scikit learn"
+  ],
+  "Pandas": [
+    "pandas"
+  ],
+  "NumPy": [
+    "numpy"
+  ],
+  "Matplotlib": [
+    "matplotlib"
+  ],
+  "OpenCV": [
+    "opencv"
+  ],
+  "Data Analysis": [
+    "data analysis",
+    "data analytics"
+  ],
+  "Data Visualization": [
+    "data visualization",
+    "data visualisation"
+  ],
+  "Statistics": [
+    "statistics",
+    "statistical analysis"
+  ],
+  "Feature Engineering": [
+    "feature engineering"
+  ],
+  "Jupyter": [
+    "jupyter",
+    "jupyter notebook"
+  ],
+  "Power BI": [
+    "power bi",
+    "powerbi"
+  ],
+  "Tableau": [
+    "tableau"
+  ],
+  "Excel": [
+    "microsoft excel",
+    "ms excel",
+    "excel spreadsheets",
+    "advanced excel"
+  ],
+  "Spark": [
+    "spark",
+    "pyspark",
+    "apache spark"
+  ],
+  "Airflow": [
+    "airflow",
+    "apache airflow"
+  ],
+  "Supabase": [
+    "supabase"
+  ],
+  "Firebase": [
+    "firebase"
+  ],
+  "Spring Boot": [
+    "spring boot",
+    "springboot"
+  ],
+  "Tailwind CSS": [
+    "tailwind",
+    "tailwind css"
+  ],
+  "Next.js": [
+    "next.js",
+    "nextjs"
+  ],
+  "Vue": [
+    "vue",
+    "vue.js",
+    "vuejs"
+  ],
+  "Angular": [
+    "angular"
+  ],
+  "Testing": [
+    "pytest",
+    "unit testing",
+    "unit tests",
+    "jest",
+    "junit"
+  ],
+  "Agile": [
+    "agile",
+    "scrum"
+  ],
+  "Data Structures": [
+    "data structures",
+    "dsa"
+  ],
+  "Algorithms": [
+    "algorithms"
+  ],
+  "OOP": [
+    "oop",
+    "object-oriented",
+    "object oriented"
+  ],
+  "MLOps": [
+    "mlops"
+  ],
+  "Model Deployment": [
+    "model deployment",
+    "model serving"
+  ],
+  "Communication": [
+    "communication skills",
+    "communication"
+  ]
+}
