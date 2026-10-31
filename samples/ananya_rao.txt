@@ -1,0 +1,21 @@
+Ananya Rao
+Hyderabad | ananya.rao@example.com
+
+Summary
+Software engineer focused on LLM-backed backend services. Roughly 2 years of experience in Python development.
+
+Experience
+Software Engineer, Lumen Labs (Jun 2024 - Present)
+- Built a document question-answering service with FastAPI, LangChain and a FAISS vector database (RAG).
+- Wrote prompt engineering templates and an evaluation script to compare Hugging Face and hosted LLMs.
+- Packaged services with Docker and deployed them on AWS using GitHub Actions CI/CD.
+- Designed REST APIs backed by PostgreSQL and SQL migrations.
+
+Python Developer Intern, Northwind Data (Jan 2024 - May 2024)
+- Cleaned and analysed datasets with Pandas and NumPy; trained baseline models with scikit-learn.
+
+Skills
+Python, FastAPI, LangChain, Hugging Face, RAG, LLMs, Docker, AWS, Git, SQL, PostgreSQL, Pandas, NumPy, scikit-learn
+
+Education
+B.Tech in Computer Science, 2020 - 2024

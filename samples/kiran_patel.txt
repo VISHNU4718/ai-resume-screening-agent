@@ -1,0 +1,20 @@
+Kiran Patel
+Pune | kiran.patel@example.com
+
+Profile
+Data analyst with 3 years of experience moving into machine learning.
+
+Experience
+Data Analyst, Brightline Retail (Jul 2023 - Present)
+- Built dashboards in Power BI and Tableau and wrote SQL against MySQL for weekly reporting.
+- Used Python with Pandas, NumPy and Matplotlib for data analysis and data visualization.
+- Trained churn prediction models with scikit-learn and tracked experiments in Jupyter notebooks.
+
+Business Analyst, Corvid Services (Jun 2022 - Jun 2023)
+- Maintained Excel models and wrote SQL queries for finance teams.
+
+Projects
+- Sentiment classifier using NLP techniques and a simple Flask app for demo.
+
+Skills
+Python, SQL, MySQL, Pandas, NumPy, scikit-learn, Flask, Power BI, Tableau, Git, NLP, Machine Learning

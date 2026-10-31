@@ -1,0 +1,18 @@
+Junior LLM Application Engineer
+
+About the role
+We are building internal tools that use large language models to summarise and search company documents. You will work with a small team to design, build and ship these services.
+
+Requirements
+- 1+ years of experience building software, internships included
+- Strong Python and experience building REST APIs with FastAPI
+- Hands-on experience with LLMs, prompt engineering and retrieval-augmented generation (RAG)
+- Familiarity with LangChain or the Hugging Face ecosystem
+- Working knowledge of Git and SQL
+- Docker for packaging services
+
+Nice to have
+- AWS or another cloud platform
+- Vector databases such as FAISS or Pinecone
+- Flask, scikit-learn, Pandas and NumPy
+- CI/CD pipelines
