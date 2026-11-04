@@ -9,6 +9,16 @@
   const results = document.getElementById("results");
   const body = document.getElementById("results-body");
   let screeningId = null;
+  let sampleFiles = null;
+  const sampleButton = document.getElementById("try-sample");
+  const SAMPLE_JOB = "Junior LLM Application Engineer\n\nAbout the role\nWe are building internal tools that use large language models to summarise and search company documents. You will work with a small team to design, build and ship these services.\n\nRequirements\n- 1+ years of experience building software, internships included\n- Strong Python and experience building REST APIs with FastAPI\n- Hands-on experience with LLMs, prompt engineering and retrieval-augmented generation (RAG)\n- Familiarity with LangChain or the Hugging Face ecosystem\n- Working knowledge of Git and SQL\n- Docker for packaging services\n\nNice to have\n- AWS or another cloud platform\n- Vector databases such as FAISS or Pinecone\n- Flask, scikit-learn, Pandas and NumPy\n- CI/CD pipelines\n";
+  const SAMPLE_RESUMES = [{"name":"ananya_rao.txt","text":"Ananya Rao\nHyderabad | ananya.rao@example.com\n\nSummary\nSoftware engineer focused on LLM-backed backend services. Roughly 2 years of experience in Python development.\n\nExperience\nSoftware Engineer, Lumen Labs (Jun 2024 - Present)\n- Built a document question-answering service with FastAPI, LangChain and a FAISS vector database (RAG).\n- Wrote prompt engineering templates and an evaluation script to compare Hugging Face and hosted LLMs.\n- Packaged services with Docker and deployed them on AWS using GitHub Actions CI/CD.\n- Designed REST APIs backed by PostgreSQL and SQL migrations.\n\nPython Developer Intern, Northwind Data (Jan 2024 - May 2024)\n- Cleaned and analysed datasets with Pandas and NumPy; trained baseline models with scikit-learn.\n\nSkills\nPython, FastAPI, LangChain, Hugging Face, RAG, LLMs, Docker, AWS, Git, SQL, PostgreSQL, Pandas, NumPy, scikit-learn\n\nEducation\nB.Tech in Computer Science, 2020 - 2024\n"},{"name":"kiran_patel.txt","text":"Kiran Patel\nPune | kiran.patel@example.com\n\nProfile\nData analyst with 3 years of experience moving into machine learning.\n\nExperience\nData Analyst, Brightline Retail (Jul 2023 - Present)\n- Built dashboards in Power BI and Tableau and wrote SQL against MySQL for weekly reporting.\n- Used Python with Pandas, NumPy and Matplotlib for data analysis and data visualization.\n- Trained churn prediction models with scikit-learn and tracked experiments in Jupyter notebooks.\n\nBusiness Analyst, Corvid Services (Jun 2022 - Jun 2023)\n- Maintained Excel models and wrote SQL queries for finance teams.\n\nProjects\n- Sentiment classifier using NLP techniques and a simple Flask app for demo.\n\nSkills\nPython, SQL, MySQL, Pandas, NumPy, scikit-learn, Flask, Power BI, Tableau, Git, NLP, Machine Learning\n"}];
+  sampleButton.addEventListener("click", () => {
+    document.getElementById("jd").value = SAMPLE_JOB;
+    sampleFiles = SAMPLE_RESUMES.map(s => new File([s.text], s.name, {type:"text/plain"}));
+    fileList.replaceChildren(...sampleFiles.map(f => el("li", {text:f.name + " · fictional sample"})));
+    form.requestSubmit();
+  });
 
   // Build elements with textContent only, so resume-derived text is never parsed as HTML.
   function el(tag, opts, children) {
@@ -159,6 +169,7 @@
   }
 
   filesInput.addEventListener("change", () => {
+    sampleFiles = null;
     fileList.replaceChildren(
       ...Array.from(filesInput.files).map((f) =>
         el("li", {}, [el("span", { text: f.name }), el("span", { className: "size", text: formatSize(f.size) })])
@@ -171,13 +182,15 @@
     showError("");
     const jd = document.getElementById("jd").value.trim();
     if (!jd) return showError("Enter a job description.");
-    if (!filesInput.files.length) return showError("Choose at least one resume.");
+    const selectedFiles = sampleFiles || Array.from(filesInput.files);
+    if (!selectedFiles.length) return showError("Choose at least one resume.");
 
     const data = new FormData();
     data.append("job_description", jd);
-    Array.from(filesInput.files).forEach((f) => data.append("resumes", f));
+    selectedFiles.forEach((f) => data.append("resumes", f));
 
     submit.disabled = true;
+    sampleButton.disabled = true;
     submit.textContent = "Screening\u2026";
     try {
       const response = await fetch("/screen", { method: "POST", body: data });
@@ -195,6 +208,7 @@
       showError(err.message || "Could not reach the server.");
     } finally {
       submit.disabled = false;
+      sampleButton.disabled = false;
       submit.textContent = "Screen resumes";
     }
   });
@@ -233,7 +247,7 @@
 
   function renderAnswer(data) {
     const note = data.analysis_mode === "llm"
-      ? (data.grounded ? "LLM answer, grounded in the excerpts cited below" : "LLM answer, but it cited no excerpt: treat it as unverified")
+      ? (data.grounded ? "LLM answer with citations; check that the excerpts support it" : "LLM answer, but it cited no excerpt: treat it as unverified")
       : "Fallback: no LLM answer, showing the most relevant resume excerpts";
     document.getElementById("ask-mode").textContent = note;
     document.getElementById("ask-answer").textContent = data.answer;
